@@ -1,5 +1,0 @@
-fastapi
-uvicorn
-pypdf
-langchain-chroma
-langchain-openai
