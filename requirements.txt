@@ -3,3 +3,4 @@ uvicorn
 pypdf
 langchain-chroma
 langchain-openai
+python-multipart
