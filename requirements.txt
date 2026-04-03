@@ -1,5 +1,6 @@
 fastapi
 uvicorn
 pypdf
+langgchain
 langchain-chroma
 langchain-openai
