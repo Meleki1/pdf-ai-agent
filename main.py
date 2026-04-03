@@ -2,7 +2,7 @@ import os
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Request
-from utils import split_text, open_pdf, store_embeddings
+from digital_library.utils import split_text, open_pdf, store_embeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
