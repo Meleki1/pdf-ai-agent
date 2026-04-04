@@ -125,7 +125,7 @@ async def telegram_webhook(req: Request):
         file_path = file_info["result"]["file_path"]
 
         # Step 2: Download file
-        file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
         file_data = requests.get(file_url).content
 
         file_location = f"data/{file_name}"
