@@ -6,6 +6,7 @@ from langchain_chroma import Chroma
 
 
 
+
 load_dotenv()
 embeddings = OpenAIEmbeddings()
 api_key = os.getenv("OPENAI_API_KEY")
