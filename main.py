@@ -93,18 +93,31 @@ def generate_answer(question):
 async def telegram_webhook(req: Request):
     data = await req.json()
 
-    message = data.get("message", {})
+    # Handle both normal and edited messages
+    message = data.get("message") or data.get("edited_message", {})
     chat_id = message.get("chat", {}).get("id")
 
     # =========================
-    # 📄 HANDLE PDF UPLOAD
+    # 📄 HANDLE DOCUMENT (PDF)
     # =========================
-    if "document" in message:
-        document = message["document"]
-        file_id = document["file_id"]
-        file_name = document.get("file_name", "uploaded.pdf")
+    document = message.get("document")
 
-        # Step 1: Get file path from Telegram
+    if document:
+        file_name = document.get("file_name", "")
+        file_id = document.get("file_id")
+
+        # Only allow PDF
+        if not file_name.lower().endswith(".pdf"):
+            requests.post(
+                f"{TELEGRAM_API_URL}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": "❌ Please upload a PDF file only."
+                }
+            )
+            return {"status": "invalid file"}
+
+        # Step 1: Get file path
         file_info = requests.get(
             f"{TELEGRAM_API_URL}/getFile?file_id={file_id}"
         ).json()
@@ -112,7 +125,7 @@ async def telegram_webhook(req: Request):
         file_path = file_info["result"]["file_path"]
 
         # Step 2: Download file
-        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+        file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
         file_data = requests.get(file_url).content
 
         file_location = f"data/{file_name}"
@@ -129,12 +142,12 @@ async def telegram_webhook(req: Request):
         global CURRENT_DOCUMENT
         CURRENT_DOCUMENT = file_location
 
-        # Step 5: Reply to user
+        # Step 5: Confirm upload
         requests.post(
             f"{TELEGRAM_API_URL}/sendMessage",
             json={
                 "chat_id": chat_id,
-                "text": "✅ PDF uploaded successfully. You can now ask questions."
+                "text": "✅ PDF uploaded successfully. Ask your question."
             }
         )
 
@@ -154,7 +167,7 @@ async def telegram_webhook(req: Request):
         f"{TELEGRAM_API_URL}/sendMessage",
         json={
             "chat_id": chat_id,
-            "text": answer[:3000]  # prevent Telegram limit
+            "text": answer[:3000]  # Telegram limit safety
         }
     )
 
