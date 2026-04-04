@@ -93,18 +93,63 @@ def generate_answer(question):
 async def telegram_webhook(req: Request):
     data = await req.json()
 
-    # Get message
     message = data.get("message", {})
     chat_id = message.get("chat", {}).get("id")
+
+    # =========================
+    # 📄 HANDLE PDF UPLOAD
+    # =========================
+    if "document" in message:
+        document = message["document"]
+        file_id = document["file_id"]
+        file_name = document.get("file_name", "uploaded.pdf")
+
+        # Step 1: Get file path from Telegram
+        file_info = requests.get(
+            f"{TELEGRAM_API_URL}/getFile?file_id={file_id}"
+        ).json()
+
+        file_path = file_info["result"]["file_path"]
+
+        # Step 2: Download file
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+        file_data = requests.get(file_url).content
+
+        file_location = f"data/{file_name}"
+
+        with open(file_location, "wb") as f:
+            f.write(file_data)
+
+        # Step 3: Process PDF
+        full_text = open_pdf(file_location)
+        chunks = split_text(full_text)
+        store_embeddings(chunks, file_location)
+
+        # Step 4: Set current document
+        global CURRENT_DOCUMENT
+        CURRENT_DOCUMENT = file_location
+
+        # Step 5: Reply to user
+        requests.post(
+            f"{TELEGRAM_API_URL}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": "✅ PDF uploaded successfully. You can now ask questions."
+            }
+        )
+
+        return {"status": "document processed"}
+
+    # =========================
+    # 💬 HANDLE TEXT MESSAGE
+    # =========================
     text = message.get("text")
 
     if not text:
         return {"status": "no text"}
 
-    # ✅ ONLY THIS LINE (your AI brain)
     answer = generate_answer(text)
 
-    # Send reply
     requests.post(
         f"{TELEGRAM_API_URL}/sendMessage",
         json={
@@ -114,7 +159,6 @@ async def telegram_webhook(req: Request):
     )
 
     return {"status": "ok"}
-
 
 
 
