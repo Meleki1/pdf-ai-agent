@@ -76,6 +76,48 @@ def test():
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
+    data = await req.json()
+
+    # Get message text
+    message = data.get("message", {})
+    chat_id = message.get("chat", {}).get("id")
+    text = message.get("text")
+
+    if not text:
+        return {"status": "no text"}
+
+    # 👉 Call your existing RAG logic
+    db = Chroma(
+        collection_name="documents",
+        embedding_function=embeddings,
+        persist_directory="db"
+    )
+
+    results = db.similarity_search(text, k=3)
+
+    context = ""
+    for result in results:
+        context += result.page_content + "\n\n"
+
+    prompt = f"""
+    Answer based only on this context:
+    {context}
+
+    Question: {text}
+    """
+
+    response = llm.invoke(prompt)
+    answer = response.content
+
+    # 👉 Send reply back to Telegram
+    requests.post(
+        f"{TELEGRAM_API_URL}/sendMessage",
+        json={
+            "chat_id": chat_id,
+            "text": answer
+        }
+    )
+
     return {"status": "ok"}
 
 
