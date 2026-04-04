@@ -18,6 +18,8 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 embeddings = OpenAIEmbeddings()
 
 
+CURRENT_DOCUMENT = None
+
 @app.get("/")
 def read_root():
     return {"message": "server is running"}
@@ -26,7 +28,8 @@ def read_root():
 def upload_file(file: UploadFile = File(...)):
     safe_filename = os.path.basename(file.filename)
     file_location = f"data/{safe_filename}"
-
+    global CURRENT_DOCUMENT
+    CURRENT_DOCUMENT = file_location
     contents = file.file.read()
 
     if len(contents) > 5_000_000:
@@ -53,32 +56,44 @@ llm = ChatOpenAI(model="gpt-4o-mini")
 @app.post("/ask")
 def ask_question(question: str):
     if not question:
-        return {"error": "question is requried"}
-    db = Chroma(
-        collection_name="documents", 
-        embedding_function=embeddings, 
-        persist_directory="db"
-        )
-    
-    results = db.similarity_search(question, k=3)
-    context = ""
+        return {"error": "question is required"}
 
+    answer = generate_answer(question)
+    return {"answer": answer}
+
+
+def generate_answer(question):
+    if not CURRENT_DOCUMENT:
+        return "No document uploaded yet"
+
+    db = Chroma(
+        collection_name="documents",
+        embedding_function=embeddings,
+        persist_directory="db"
+    )
+
+    results = db.similarity_search(
+        question,
+        k=3,
+        filter={"source": CURRENT_DOCUMENT}
+    )
+
+    context = ""
     for result in results:
         context += result.page_content + "\n\n"
-    
-    response = llm.invoke(f"Answer the question based on this context:\n{context}\n\nQuestion: {question}")
-    return {"answer": response.content }
 
+    response = llm.invoke(
+        f"Answer only from this context:\n{context}\n\nQuestion: {question}"
+    )
 
-@app.get("/test")
-def test():
-    return {"message": "test works"}
+    return response.content
+
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
     data = await req.json()
 
-    # Get message text
+    # Get message
     message = data.get("message", {})
     chat_id = message.get("chat", {}).get("id")
     text = message.get("text")
@@ -86,35 +101,15 @@ async def telegram_webhook(req: Request):
     if not text:
         return {"status": "no text"}
 
-    # 👉 Call your existing RAG logic
-    db = Chroma(
-        collection_name="documents",
-        embedding_function=embeddings,
-        persist_directory="db"
-    )
+    # ✅ ONLY THIS LINE (your AI brain)
+    answer = generate_answer(text)
 
-    results = db.similarity_search(text, k=3)
-
-    context = ""
-    for result in results:
-        context += result.page_content + "\n\n"
-
-    prompt = f"""
-    Answer based only on this context:
-    {context}
-
-    Question: {text}
-    """
-
-    response = llm.invoke(prompt)
-    answer = response.content
-
-    # 👉 Send reply back to Telegram
+    # Send reply
     requests.post(
         f"{TELEGRAM_API_URL}/sendMessage",
         json={
             "chat_id": chat_id,
-            "text": answer
+            "text": answer[:3000]  # prevent Telegram limit
         }
     )
 
