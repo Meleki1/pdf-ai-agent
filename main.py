@@ -70,7 +70,9 @@ def ask_question(question: str):
     return {"answer": response.content }
 
 
-
+@app.get("/test")
+def test():
+    return {"message": "test works"}
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
